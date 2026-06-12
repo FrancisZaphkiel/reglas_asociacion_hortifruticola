@@ -286,3 +286,106 @@ def benchmark_miners(transactions, min_support):
     
     return result_summary, apriori_res
 
+
+# ----------------------------------------------------
+# 5. Generación y Evaluación de Reglas de Asociación
+# ----------------------------------------------------
+def generate_proposed_rules(frequent_itemsets, N, min_confidence=0.1):
+    """
+    Genera y clasifica las reglas de asociación para las 6 categorías propuestas
+    por el usuario, calculando soporte, confianza y lift.
+    """
+    # Agrupar las reglas generadas por su categoría (1 a 6)
+    rules_by_category = {i: [] for i in range(1, 7)}
+    
+    # Procesar itemsets de tamaño 2 (para reglas de tipo 2, 3, 5: antecedente de tamaño 1)
+    for itemset, count in frequent_itemsets.items():
+        if len(itemset) == 2:
+            items = list(itemset)
+            item1, item2 = items[0], items[1]
+            pref1, val1 = item1.split(':', 1)
+            pref2, val2 = item2.split(':', 1)
+            
+            # Regla 2: {Región} => {Producto}
+            # ant: reg, cons: prod
+            if pref1 == 'reg' and pref2 == 'prod':
+                conf = count / frequent_itemsets[frozenset([item1])]
+                if conf >= min_confidence:
+                    lift = conf / (frequent_itemsets[frozenset([item2])] / N)
+                    rules_by_category[2].append((val1, val2, count/N, conf, lift))
+            elif pref1 == 'prod' and pref2 == 'reg':
+                conf = count / frequent_itemsets[frozenset([item2])]
+                if conf >= min_confidence:
+                    lift = conf / (frequent_itemsets[frozenset([item1])] / N)
+                    rules_by_category[2].append((val2, val1, count/N, conf, lift))
+                    
+            # Regla 3: {Producto} => {Origen}
+            # ant: prod, cons: ori
+            if pref1 == 'prod' and pref2 == 'ori':
+                conf = count / frequent_itemsets[frozenset([item1])]
+                if conf >= min_confidence:
+                    lift = conf / (frequent_itemsets[frozenset([item2])] / N)
+                    rules_by_category[3].append((val1, val2, count/N, conf, lift))
+            elif pref1 == 'ori' and pref2 == 'prod':
+                conf = count / frequent_itemsets[frozenset([item2])]
+                if conf >= min_confidence:
+                    lift = conf / (frequent_itemsets[frozenset([item1])] / N)
+                    rules_by_category[3].append((val2, val1, count/N, conf, lift))
+                    
+            # Regla 5: {Origen} => {Calidad}
+            # ant: ori, cons: cal
+            if pref1 == 'ori' and pref2 == 'cal':
+                conf = count / frequent_itemsets[frozenset([item1])]
+                if conf >= min_confidence:
+                    lift = conf / (frequent_itemsets[frozenset([item2])] / N)
+                    rules_by_category[5].append((val1, val2, count/N, conf, lift))
+            elif pref1 == 'cal' and pref2 == 'ori':
+                conf = count / frequent_itemsets[frozenset([item2])]
+                if conf >= min_confidence:
+                    lift = conf / (frequent_itemsets[frozenset([item1])] / N)
+                    rules_by_category[5].append((val2, val1, count/N, conf, lift))
+                    
+        # Procesar itemsets de tamaño 3 (para reglas de tipo 1, 4, 6: antecedente de tamaño 2)
+        elif len(itemset) == 3:
+            items = list(itemset)
+            # Analizar todas las combinaciones de 2 ítems de antecedente y 1 de consecuente
+            for ant_items in itertools.combinations(items, 2):
+                cons_item = list(itemset.difference(ant_items))[0]
+                
+                # Obtener prefijos
+                ant1, ant2 = ant_items[0], ant_items[1]
+                pref_a1, val_a1 = ant1.split(':', 1)
+                pref_a2, val_a2 = ant2.split(':', 1)
+                pref_c, val_c = cons_item.split(':', 1)
+                
+                # Ordenar prefijos del antecedente para facilitar mapeo
+                sorted_ant = sorted([(pref_a1, val_a1), (pref_a2, val_a2)])
+                p_a1, v_a1 = sorted_ant[0]
+                p_a2, v_a2 = sorted_ant[1]
+                
+                # Buscar soporte del antecedente
+                ant_frozenset = frozenset([ant1, ant2])
+                if ant_frozenset in frequent_itemsets:
+                    ant_count = frequent_itemsets[ant_frozenset]
+                    conf = count / ant_count
+                    if conf >= min_confidence:
+                        lift = conf / (frequent_itemsets[frozenset([cons_item])] / N)
+                        
+                        # Regla 1: {Producto, Región} => {Calidad}
+                        if p_a1 == 'prod' and p_a2 == 'reg' and pref_c == 'cal':
+                            rules_by_category[1].append((f"{v_a1}, {v_a2}", val_c, count/N, conf, lift))
+                            
+                        # Regla 4: {Producto, Variedad} => {Origen}
+                        if p_a1 == 'prod' and p_a2 == 'var' and pref_c == 'ori':
+                            rules_by_category[4].append((f"{v_a1}, {v_a2}", val_c, count/N, conf, lift))
+                            
+                        # Regla 6: {Región, Mercado} => {Calidad}
+                        if p_a1 == 'mer' and p_a2 == 'reg' and pref_c == 'cal':
+                            rules_by_category[6].append((f"{v_a2}, {v_a1}", val_c, count/N, conf, lift))
+                            
+    # Ordenar reglas en cada categoría por Lift descendente
+    for i in range(1, 7):
+        rules_by_category[i].sort(key=lambda x: x[4], reverse=True)
+        
+    return rules_by_category
+
