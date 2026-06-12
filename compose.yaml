@@ -1,0 +1,10 @@
+services:
+  analysis:
+    build: .
+    container_name: hortifruticultura-analysis
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/app
+    environment:
+      - JUPYTER_PORT=8888
